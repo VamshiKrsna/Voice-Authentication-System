@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+# In this we try reading a paragraph to authorize our voice
+# PERFECT - works so well.
 
 import sounddevice as sd
 import numpy as np
@@ -7,13 +8,11 @@ import time
 import wave
 from scipy import signal
 from scipy.io import wavfile
-import threading
-from datetime import datetime
 
 class SimpleVoiceAuth:
     def __init__(self):
         self.sample_rate = 16000
-        self.duration = 5
+        self.duration = 10  # Increased duration for a paragraph
         self.channels = 1
         self.recordings_dir = "voice_samples"
         self.enrolled_dir = "enrolled_users"
@@ -75,27 +74,25 @@ class SimpleVoiceAuth:
         return similarity
     
     def enroll_user(self, username):
-        """Enroll a new user with 3 voice samples"""
+        """Enroll a new user with a paragraph"""
         print(f"\n📝 Enrolling user: {username}")
-        print("We'll record 3 samples of your voice.")
-        print('Please read the following phrase each time in different tone:')
-        print('"My voice is my secure password."')
+        print("Please read the following paragraph:")
+        paragraph = (
+            "The quick brown fox jumps over the lazy dog. "
+            "Pack my box with five dozen liquor jugs. "
+            "How vexingly quick daft zebras jump! "
+            "Sphinx of black quartz, judge my vow."
+        )
+        print(paragraph)
         
-        features_list = []
+        filename = os.path.join(self.recordings_dir, f"{username}_enrollment.wav")
+        self.record_audio(filename)
         
-        # recording 3 samples
-        for i in range(3):
-            print(f"\nRecording sample {i+1} of 3")
-            filename = os.path.join(self.recordings_dir, f"{username}_sample_{i+1}.wav")
-            self.record_audio(filename)
-            
-            # Extract features
-            sample_rate, audio_data = wavfile.read(filename)
-            features = self.extract_features(audio_data)
-            features_list.append(features)
+        # Extract features
+        sample_rate, audio_data = wavfile.read(filename)
+        enrollment_features = self.extract_features(audio_data)
         
-        # Save average features as enrollment template
-        enrollment_features = np.mean(features_list, axis=0)
+        # Save features as enrollment template
         np.save(os.path.join(self.enrolled_dir, f"{username}_enrolled.npy"), enrollment_features)
         print(f"\n✅ Successfully enrolled {username}!")
     
@@ -108,8 +105,7 @@ class SimpleVoiceAuth:
             return False
         
         print("\n🔒 Voice Verification Started")
-        print('Please read the phrase:')
-        print('"My voice is my secure password."')
+        print("Please speak any phrase for verification.")
         
         # recording the verification attempt
         verify_file = os.path.join(self.recordings_dir, f"{username}_verify_{int(time.time())}.wav")
@@ -121,7 +117,7 @@ class SimpleVoiceAuth:
         verify_features = self.extract_features(verify_audio)
         
         similarity = self.compare_features(enrolled_features, verify_features)
-        threshold = 0.75  #adjustable threshold
+        threshold = 0.75  # adjustable threshold
         
         if similarity > threshold:
             print(f"\n✅ Voice verified! Similarity score: {similarity:.2f}")

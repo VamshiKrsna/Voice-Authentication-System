@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import sounddevice as sd
 import numpy as np
 import os
@@ -7,8 +5,6 @@ import time
 import wave
 from scipy import signal
 from scipy.io import wavfile
-import threading
-from datetime import datetime
 
 class SimpleVoiceAuth:
     def __init__(self):
@@ -75,17 +71,22 @@ class SimpleVoiceAuth:
         return similarity
     
     def enroll_user(self, username):
-        """Enroll a new user with 3 voice samples"""
+        """Enroll a new user with 3 different voice samples"""
         print(f"\n📝 Enrolling user: {username}")
-        print("We'll record 3 samples of your voice.")
-        print('Please read the following phrase each time in different tone:')
-        print('"My voice is my secure password."')
+        print("We'll record 3 samples of your voice using different phrases.")
+        
+        phrases = [
+            "I love drones and aviation.",
+            "The quick brown fox jumps over the lazy dog.",
+            "The five boxing wizards jump quickly."
+        ]
         
         features_list = []
         
-        # recording 3 samples
-        for i in range(3):
+        # recording 3 samples with different phrases
+        for i, phrase in enumerate(phrases):
             print(f"\nRecording sample {i+1} of 3")
+            print(f'Please read the following phrase: "{phrase}"')
             filename = os.path.join(self.recordings_dir, f"{username}_sample_{i+1}.wav")
             self.record_audio(filename)
             
@@ -109,7 +110,7 @@ class SimpleVoiceAuth:
         
         print("\n🔒 Voice Verification Started")
         print('Please read the phrase:')
-        print('"My voice is my secure password."')
+        print('"The Quick Brown Fox Jumps over the lazy dog."')
         
         # recording the verification attempt
         verify_file = os.path.join(self.recordings_dir, f"{username}_verify_{int(time.time())}.wav")
@@ -121,7 +122,7 @@ class SimpleVoiceAuth:
         verify_features = self.extract_features(verify_audio)
         
         similarity = self.compare_features(enrolled_features, verify_features)
-        threshold = 0.75  #adjustable threshold
+        threshold = 0.75  # adjustable threshold
         
         if similarity > threshold:
             print(f"\n✅ Voice verified! Similarity score: {similarity:.2f}")
