@@ -1,5 +1,4 @@
-# In this we try reading a paragraph to authorize our voice
-# PERFECT - works so well.
+# PERFECT.
 
 import sounddevice as sd
 import numpy as np
@@ -12,7 +11,6 @@ from scipy.io import wavfile
 class SimpleVoiceAuth:
     def __init__(self):
         self.sample_rate = 16000
-        self.duration = 12  # Increased duration for a paragraph
         self.channels = 1
         self.recordings_dir = "voice_samples"
         self.enrolled_dir = "enrolled_users"
@@ -28,11 +26,10 @@ class SimpleVoiceAuth:
             print(f"{i}...")
             time.sleep(1)
             
-        print("🎤 Recording... Speak now!")
+        print("\n🎤 Recording... Speak now!")
         
-        # audio recording
         recording = sd.rec(
-            int(self.duration * self.sample_rate),
+            int(5 * self.sample_rate),  # 5 seconds per line
             samplerate=self.sample_rate,
             channels=self.channels,
             dtype=np.int16
@@ -40,66 +37,77 @@ class SimpleVoiceAuth:
         sd.wait()
         print("✅ Recording complete!")
         
-        # save as wav file
         with wave.open(filename, 'wb') as wf:
             wf.setnchannels(self.channels)
-            wf.setsampwidth(2)  # 2 bytes for int16
+            wf.setsampwidth(2)
             wf.setframerate(self.sample_rate)
             wf.writeframes(recording.tobytes())
     
+    def merge_audio_files(self, file_list, output_filename):
+        """Merge multiple WAV files into one"""
+        combined_audio = []
+        for file in file_list:
+            sample_rate, audio_data = wavfile.read(file)
+            combined_audio.append(audio_data)
+        
+        merged_audio = np.concatenate(combined_audio, axis=0)
+        
+        with wave.open(output_filename, 'wb') as wf:
+            wf.setnchannels(self.channels)
+            wf.setsampwidth(2)
+            wf.setframerate(self.sample_rate)
+            wf.writeframes(merged_audio.tobytes())
+        
     def extract_features(self, audio_data):
         """Extract simple audio features"""
-        # normalizing the audio
         audio_norm = audio_data / np.max(np.abs(audio_data))
-        
-        # Calculate spectrogram
         frequencies, times, spectrogram = signal.spectrogram(
             audio_norm,
             fs=self.sample_rate,
             nperseg=1024,
             noverlap=512
         )
-        
-        # mean energy per frequency band
-        feature_vector = np.mean(spectrogram, axis=1)
-        return feature_vector
+        return np.mean(spectrogram, axis=1)
     
     def compare_features(self, features1, features2):
         """Compare two feature vectors"""
-        # cosine similarity
         dot_product = np.dot(features1, features2)
         norm1 = np.linalg.norm(features1)
         norm2 = np.linalg.norm(features2)
-        similarity = dot_product / (norm1 * norm2)
-        return similarity
+        return dot_product / (norm1 * norm2)
     
     def enroll_user(self, username):
-        """Enroll a new user with a paragraph"""
+        """Enroll a new user line by line"""
         print(f"\n📝 Enrolling user: {username}")
-        print("Please read the following paragraph:")
-        paragraph = (
-            "The quick brown fox jumps over the lazy dog. "
-            "Pack my box with five dozen liquor jugs. "
-            "How vexingly quick daft zebras jump! "
+        
+        paragraph_lines = [
+            "The quick brown fox jumps over the lazy dog.",
+            "Pack my box with five dozen liquor jugs.",
+            "How vexingly quick daft zebras jump!",
             "Sphinx of black quartz, judge my vow."
-        )
-        print(paragraph)
+        ]
         
-        filename = os.path.join(self.recordings_dir, f"{username}_enrollment.wav")
-        self.record_audio(filename)
+        temp_files = []
+        for i, line in enumerate(paragraph_lines):
+            print(f"\n📜 Read this line: {line}")
+            filename = os.path.join(self.recordings_dir, f"{username}_line{i+1}.wav")
+            self.record_audio(filename)
+            temp_files.append(filename)
         
-        # Extract features
-        sample_rate, audio_data = wavfile.read(filename)
+        # Merge all recorded lines into one file
+        merged_filename = os.path.join(self.recordings_dir, f"{username}_enrollment.wav")
+        self.merge_audio_files(temp_files, merged_filename)
+        
+        # Extract and save features
+        sample_rate, audio_data = wavfile.read(merged_filename)
         enrollment_features = self.extract_features(audio_data)
-        
-        # Save features as enrollment template
         np.save(os.path.join(self.enrolled_dir, f"{username}_enrolled.npy"), enrollment_features)
+        
         print(f"\n✅ Successfully enrolled {username}!")
     
     def verify_user(self, username):
         """Verify a user's identity using voice"""
         enrolled_file = os.path.join(self.enrolled_dir, f"{username}_enrolled.npy")
-        
         if not os.path.exists(enrolled_file):
             print("❌ User not found! Please enroll first.")
             return False
@@ -107,17 +115,15 @@ class SimpleVoiceAuth:
         print("\n🔒 Voice Verification Started")
         print("Please speak any phrase for verification.")
         
-        # recording the verification attempt
         verify_file = os.path.join(self.recordings_dir, f"{username}_verify_{int(time.time())}.wav")
         self.record_audio(verify_file)
         
-        # loading and comparing features
         enrolled_features = np.load(enrolled_file)
         sample_rate, verify_audio = wavfile.read(verify_file)
         verify_features = self.extract_features(verify_audio)
         
         similarity = self.compare_features(enrolled_features, verify_features)
-        threshold = 0.75  # adjustable threshold
+        threshold = 0.75
         
         if similarity > threshold:
             print(f"\n✅ Voice verified! Similarity score: {similarity:.2f}")
